@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: dist/ is up to date
+        run: git diff --exit-code -- dist || (echo "::error::Run npm run build and commit dist/" && exit 1)
+
+  node-18:
+    name: Runs on Node 18 and 20
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["18", "20"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # The test tools need Node 22+, the scanner itself doesn't: run the committed build.
+      - run: node dist/cli.js --offline --version && node dist/cli.js --offline
+
+  self-scan:
+    name: Scan this repository with the action
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          fail-on: t0

@@ -1,0 +1,22 @@
+# Copy to .github/workflows/sage7-scan.yml in your repository.
+name: Sage 7 Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write # summary comment on pull requests
+  security-events: write # only needed with upload-sarif: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Genie-Research-Foundation/sage7-scan@v1
+        with:
+          fail-on: t0 # fail when a vulnerable package is reachable from a public handler
+          upload-sarif: true

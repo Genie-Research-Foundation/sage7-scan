@@ -1,0 +1,5 @@
+node_modules/
+coverage/
+*.log
+.DS_Store
+# dist/ is committed: the GitHub Action runs it directly.

@@ -1,0 +1,127 @@
+name: "Sage 7 Scan"
+description: "Reachability-aware security scan for JS/TS: separates the vulnerabilities your code actually reaches from lockfile noise, and comments the counts on pull requests."
+author: "Sage 7"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Project directory to scan, relative to the repository root."
+    required: false
+    default: "."
+  fail-on:
+    description: "Fail the job when reachable findings exist: t0 (public handlers), t1 (any reachable) or none."
+    required: false
+    default: "none"
+  comment:
+    description: "Post or update one summary comment on pull requests (needs pull-requests: write)."
+    required: false
+    default: "true"
+  upload-sarif:
+    description: "Upload SARIF to GitHub Code Scanning (needs security-events: write)."
+    required: false
+    default: "false"
+  offline:
+    description: "Skip OSV.dev and run local code rules only."
+    required: false
+    default: "false"
+  sage7-token:
+    description: "Optional Sage 7 project token: sends findings to your Sage 7 project."
+    required: false
+    default: ""
+  github-token:
+    description: "Token used to comment on the pull request."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  total:
+    description: "All findings."
+    value: ${{ steps.scan.outputs.total }}
+  actionable:
+    description: "Reachable findings (T0 + T1)."
+    value: ${{ steps.scan.outputs.actionable }}
+  t0:
+    description: "Findings reachable from a public handler."
+    value: ${{ steps.scan.outputs.t0 }}
+  noise:
+    description: "Dormant findings (T2 + T3)."
+    value: ${{ steps.scan.outputs.noise }}
+  sarif:
+    description: "Path to the SARIF report."
+    value: ${{ steps.scan.outputs.sarif }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run Sage 7 Scan
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        SCAN_OFFLINE: ${{ inputs.offline }}
+        # When set, the scan also sends its findings to your Sage 7 project.
+        SAGE7_PROJECT_TOKEN: ${{ inputs.sage7-token }}
+      run: |
+        set -euo pipefail
+        out="$RUNNER_TEMP/sage7-scan"
+        mkdir -p "$out"
+        args=(--cwd "$GITHUB_WORKSPACE/$SCAN_PATH" --json --sarif "$out/results.sarif" --markdown "$out/summary.md" --badge "$out/badge.json")
+        if [ "$SCAN_OFFLINE" = "true" ]; then args+=(--offline); fi
+        node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}" > "$out/result.json"
+        node -e '
+          const r = require(process.argv[1]);
+          const c = r.counts;
+          for (const k of ["total", "actionable", "t0", "t1", "noise"]) console.log(`${k}=${c[k]}`);
+          for (const w of r.warnings || []) console.error(`::warning title=Sage 7 Scan::${w}`);
+        ' "$out/result.json" >> "$GITHUB_OUTPUT"
+        echo "sarif=$out/results.sarif" >> "$GITHUB_OUTPUT"
+        echo "summary=$out/summary.md" >> "$GITHUB_OUTPUT"
+        cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Comment on the pull request
+      if: ${{ inputs.comment == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SUMMARY: ${{ steps.scan.outputs.summary }}
+      run: |
+        set -uo pipefail
+        marker='<!-- sage7-scan -->'
+        existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+          --jq "[.[] | select(.body | startswith(\"$marker\"))][0].id // empty" 2>/dev/null | head -n1)
+        body=$(jq -Rs '{body: .}' < "$SUMMARY")
+        if [ -n "$existing" ]; then
+          echo "$body" | gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" --input - >/dev/null \
+            || echo "::warning title=Sage 7 Scan::Could not update the pull request comment (fork PRs have a read-only token)."
+        else
+          echo "$body" | gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --input - >/dev/null \
+            || echo "::warning title=Sage 7 Scan::Could not comment on the pull request (it needs pull-requests: write; fork PRs have a read-only token)."
+        fi
+
+    - name: Upload SARIF to Code Scanning
+      if: ${{ inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif }}
+        category: sage7-scan
+
+    - name: Apply fail-on
+      if: ${{ inputs.fail-on != 'none' }}
+      shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
+        T0: ${{ steps.scan.outputs.t0 }}
+        ACTIONABLE: ${{ steps.scan.outputs.actionable }}
+      run: |
+        case "$FAIL_ON" in
+          t0) n="$T0" ;;
+          t1) n="$ACTIONABLE" ;;
+          *) echo "::error title=Sage 7 Scan::fail-on must be t0, t1 or none"; exit 1 ;;
+        esac
+        if [ "${n:-0}" -gt 0 ]; then
+          echo "::error title=Sage 7 Scan::$n reachable finding(s) at or above $FAIL_ON. See the job summary."
+          exit 1
+        fi

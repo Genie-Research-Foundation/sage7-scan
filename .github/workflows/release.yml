@@ -1,0 +1,37 @@
+name: Release
+
+# Publish to npm when a GitHub release is published (tag vX.Y.Z), then move the
+# major tag (v1) so `uses: Genie-Research-Foundation/sage7-scan@v1` picks it up.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - run: npm ci
+      - name: Tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          src=$(node -p "require('fs').readFileSync('src/sage7-scan.ts','utf8').match(/VERSION = \"([^\"]+)\"/)[1]")
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$src" ] || { echo "::error::tag $tag, package.json $pkg, VERSION $src must match"; exit 1; }
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Move the major tag
+        run: |
+          major="v$(node -p "require('./package.json').version.split('.')[0]")"
+          git tag -f "$major"
+          git push -f origin "$major"

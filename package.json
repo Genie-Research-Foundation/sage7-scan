@@ -1,0 +1,65 @@
+{
+  "name": "@sage7/scan",
+  "version": "1.0.0",
+  "description": "Reachability-aware security scan for JavaScript and TypeScript: separates the vulnerable dependencies your code actually reaches from lockfile noise.",
+  "keywords": [
+    "security",
+    "sca",
+    "vulnerability",
+    "reachability",
+    "osv",
+    "sarif",
+    "npm",
+    "pnpm",
+    "yarn",
+    "bun",
+    "github-action",
+    "vibe-coding"
+  ],
+  "homepage": "https://sage7.dev/scan",
+  "bugs": "https://github.com/Genie-Research-Foundation/sage7-scan/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Genie-Research-Foundation/sage7-scan.git"
+  },
+  "license": "Apache-2.0",
+  "author": "Sage 7 (https://sage7.dev)",
+  "type": "module",
+  "bin": {
+    "sage7-scan": "dist/cli.js"
+  },
+  "main": "dist/sage7-scan.js",
+  "types": "dist/sage7-scan.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/sage7-scan.d.ts",
+      "default": "./dist/sage7-scan.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "scan": "node dist/cli.js",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
