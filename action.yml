@@ -1,5 +1,5 @@
 name: "Sage 7 Scan"
-description: "Reachability-aware security scan for JS/TS: separates the vulnerabilities your code actually reaches from lockfile noise, and comments the counts on pull requests."
+description: "Reachability-aware JS/TS security scan: flags the vulnerabilities your code actually reaches, not lockfile noise."
 author: "Sage 7"
 branding:
   icon: "shield"
