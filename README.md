@@ -145,4 +145,4 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). To
 
 ## License
 
-[Apache License 2.0](LICENSE). "Sage 7" is a trademark; the license does not grant rights to use it.
+[Apache License 2.0](LICENSE). "Sage 7" is a trademark of Sage7 Enterprises; the license does not grant rights to use it.
